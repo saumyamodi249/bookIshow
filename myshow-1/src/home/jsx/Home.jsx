@@ -69,6 +69,7 @@ const Home = () => {
         setTheaters(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Theater API Error:", err);
+
         setTheaterError(
           err.message || "Failed to load theaters"
         );
@@ -116,9 +117,6 @@ const Home = () => {
         `,
       }}
     >
-      {/* ==============================
-          NAVBAR
-      ============================== */}
       <Navbar />
 
       {/* ==============================
@@ -183,7 +181,6 @@ const Home = () => {
             >
               Theater
             </button>
-
           </div>
 
           {/* ==================================================
@@ -376,24 +373,27 @@ const Home = () => {
                         theater._id ||
                         index
                       }
-                      className="
-                        group
-                        flex
-                        min-h-[66px]
-                        w-full
-                        items-center
-                        justify-between
-                        rounded-md
-                        border
-                        border-gray-200
-                        bg-white/40
-                        px-3
-                        py-2
-                        transition-all
-                        duration-200
-                        hover:border-[#1090DF]
-                        hover:bg-white
-                      "
+                     className="
+  group
+  flex
+  min-h-[66px]
+  w-full
+  items-center
+  justify-between
+  rounded-md
+  border
+  border-gray-200
+  bg-white/40
+  px-3
+  py-2
+  transition-all
+  duration-200
+  hover:scale-[1.02]
+  hover:border-[#1090DF]
+  hover:bg-[#C2E8FF]
+
+  hover:shadow-md
+"
                     >
 
                       {/* ==============================
@@ -416,7 +416,7 @@ const Home = () => {
                         </h2>
 
                         {/* LOCATION */}
-                        <div className="mt-2 flex items-start gap-2">
+                        <div className="mt-3 flex items-center gap-2">
 
                           {/* LOCATION ICON */}
                           <svg

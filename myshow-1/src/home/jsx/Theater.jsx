@@ -57,7 +57,6 @@ const Theater = () => {
 
       <section className="px-6 py-8">
         <div className="mx-auto max-w-7xl">
-
           {/* ==============================
               TITLE
           ============================== */}
@@ -81,9 +80,7 @@ const Theater = () => {
               ERROR
           ============================== */}
           {error && !loading && (
-            <div className="rounded-lg bg-red-50 p-4 text-red-600">
-              {error}
-            </div>
+            <div className="rounded-lg bg-red-50 p-4 text-red-600">{error}</div>
           )}
 
           {/* ==============================
@@ -114,10 +111,7 @@ const Theater = () => {
                   "Location not available";
 
                 const pincode =
-                  theater.pincode ||
-                  theater.pinCode ||
-                  theater.zipCode ||
-                  "";
+                  theater.pincode || theater.pinCode || theater.zipCode || "";
 
                 return (
                   <div
@@ -138,22 +132,20 @@ const Theater = () => {
                       transition-all
                       duration-200
                       hover:border-[#1090DF]
-                      hover:bg-white
+ hover:bg-[#e6f5ff]
                     "
                   >
                     {/* ==============================
                         LEFT
                     ============================== */}
                     <div className="min-w-0">
-
                       {/* Theater Name */}
                       <h2 className="text-sm font-semibold text-[#1090DF]">
                         {name}
                       </h2>
 
                       {/* Location */}
-                      <div className="mt-2 flex items-start gap-2">
-
+                      <div className="mb-2 flex items-start gap-2">
                         {/* Location Icon */}
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -175,19 +167,13 @@ const Theater = () => {
                             d="M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"
                           />
 
-                          <circle
-                            cx="12"
-                            cy="9"
-                            r="2.2"
-                          />
+                          <circle cx="12" cy="9" r="2.2" />
                         </svg>
 
                         <div className="text-[10px] leading-3 text-gray-500">
                           <p>{address}</p>
 
-                          {pincode && (
-                            <p>{pincode}</p>
-                          )}
+                          {pincode && <p>{pincode}</p>}
                         </div>
                       </div>
                     </div>

@@ -7,6 +7,8 @@ import Home from "./home/jsx/Home";
 import MyTicket from "./home/jsx/MyTIcket";
 import MovieDetails from "./home/jsx/MovieDetails";
 import Theater from "./home/jsx/Theater";
+import TheaterDetails from "./home/jsx/TheaterDetails";
+
 function App() {
   return (
     <BrowserRouter>
@@ -21,9 +23,12 @@ function App() {
 
         {/* Movie Details */}
         <Route path="/movie/:id" element={<MovieDetails />} />
-        
+
         {/* Theater */}
         <Route path="/theaters" element={<Theater />} />
+
+        {/* Theater Details */}
+        <Route path="/theaters/:id" element={<TheaterDetails />} />
       </Routes>
     </BrowserRouter>
   );
