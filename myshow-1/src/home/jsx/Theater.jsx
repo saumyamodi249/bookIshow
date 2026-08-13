@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Navbar from "./Navbar";
 import { getTheaters } from "../js/Theater";
 
 const Theater = () => {
+  const navigate = useNavigate();
+
   const [theaters, setTheaters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -32,6 +35,20 @@ const Theater = () => {
     fetchTheaters();
   }, []);
 
+  // ==============================
+  // THEATER CLICK
+  // ==============================
+  const handleTheaterClick = (theaterId) => {
+    if (!theaterId) {
+      console.error("Theater ID is missing");
+      return;
+    }
+
+    console.log("Opening Theater:", theaterId);
+
+    navigate(`/theaters/${theaterId}`);
+  };
+
   return (
     <main
       className="h-screen overflow-y-auto hide-scrollbar"
@@ -57,6 +74,7 @@ const Theater = () => {
 
       <section className="px-6 py-8">
         <div className="mx-auto max-w-7xl">
+
           {/* ==============================
               TITLE
           ============================== */}
@@ -80,7 +98,9 @@ const Theater = () => {
               ERROR
           ============================== */}
           {error && !loading && (
-            <div className="rounded-lg bg-red-50 p-4 text-red-600">{error}</div>
+            <div className="rounded-lg bg-red-50 p-4 text-red-600">
+              {error}
+            </div>
           )}
 
           {/* ==============================
@@ -97,7 +117,13 @@ const Theater = () => {
           ============================== */}
           {!loading && !error && theaters.length > 0 && (
             <div className="space-y-2">
+
               {theaters.map((theater, index) => {
+                const theaterId =
+                  theater.id ||
+                  theater.theaterId ||
+                  theater._id;
+
                 const name =
                   theater.name ||
                   theater.theaterName ||
@@ -111,16 +137,32 @@ const Theater = () => {
                   "Location not available";
 
                 const pincode =
-                  theater.pincode || theater.pinCode || theater.zipCode || "";
+                  theater.pincode ||
+                  theater.pinCode ||
+                  theater.zipCode ||
+                  "";
 
                 return (
                   <div
-                    key={theater.id || theater._id || index}
+                    key={theaterId || index}
+                    onClick={() => handleTheaterClick(theaterId)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter" ||
+                        event.key === " "
+                      ) {
+                        event.preventDefault();
+                        handleTheaterClick(theaterId);
+                      }
+                    }}
                     className="
                       group
                       flex
                       min-h-[66px]
                       w-full
+                      cursor-pointer
                       items-center
                       justify-between
                       rounded-md
@@ -132,13 +174,15 @@ const Theater = () => {
                       transition-all
                       duration-200
                       hover:border-[#1090DF]
- hover:bg-[#e6f5ff]
+                      hover:bg-[#e6f5ff]
                     "
                   >
+
                     {/* ==============================
                         LEFT
                     ============================== */}
                     <div className="min-w-0">
+
                       {/* Theater Name */}
                       <h2 className="text-sm font-semibold text-[#1090DF]">
                         {name}
@@ -146,6 +190,7 @@ const Theater = () => {
 
                       {/* Location */}
                       <div className="mb-2 flex items-start gap-2">
+
                         {/* Location Icon */}
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -167,13 +212,19 @@ const Theater = () => {
                             d="M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"
                           />
 
-                          <circle cx="12" cy="9" r="2.2" />
+                          <circle
+                            cx="12"
+                            cy="9"
+                            r="2.2"
+                          />
                         </svg>
 
                         <div className="text-[10px] leading-3 text-gray-500">
                           <p>{address}</p>
 
-                          {pincode && <p>{pincode}</p>}
+                          {pincode && (
+                            <p>{pincode}</p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -183,6 +234,10 @@ const Theater = () => {
                     ============================== */}
                     <button
                       type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleTheaterClick(theaterId);
+                      }}
                       className="
                         ml-4
                         shrink-0
@@ -196,9 +251,11 @@ const Theater = () => {
                     >
                       ›
                     </button>
+
                   </div>
                 );
               })}
+
             </div>
           )}
         </div>

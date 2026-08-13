@@ -3,32 +3,47 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Signup from "./auth/Signup.jsx";
 import Login from "./auth/Login.jsx";
 
-import Home from "./home/jsx/Home";
-import MyTicket from "./home/jsx/MyTIcket";
-import MovieDetails from "./home/jsx/MovieDetails";
-import Theater from "./home/jsx/Theater";
-import TheaterDetails from "./home/jsx/TheaterDetails";
+import Home from "./home/jsx/Home.jsx";
+import MyTicket from "./home/jsx/MyTIcket.jsx";
+import MovieDetails from "./home/jsx/MovieDetails.jsx";
+import Theater from "./home/jsx/Theater.jsx";
+import TheaterDetails from "./home/jsx/TheaterDetails.jsx";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Auth */}
+
+        {/* =========================
+            AUTH
+        ========================= */}
         <Route path="/" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
 
-        {/* Main */}
+        {/* =========================
+            MAIN
+        ========================= */}
         <Route path="/home" element={<Home />} />
         <Route path="/my-ticket" element={<MyTicket />} />
 
-        {/* Movie Details */}
+        {/* =========================
+            MOVIE DETAILS
+        ========================= */}
         <Route path="/movie/:id" element={<MovieDetails />} />
 
-        {/* Theater */}
+        {/* =========================
+            THEATER LIST
+        ========================= */}
         <Route path="/theaters" element={<Theater />} />
 
-        {/* Theater Details */}
-        <Route path="/theaters/:id" element={<TheaterDetails />} />
+        {/* =========================
+            THEATER DETAILS
+        ========================= */}
+        <Route
+          path="/theaters/:id"
+          element={<TheaterDetails />}
+        />
+
       </Routes>
     </BrowserRouter>
   );

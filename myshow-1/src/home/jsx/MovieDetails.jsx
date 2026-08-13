@@ -7,17 +7,35 @@ const MovieDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // Movie data
+  // --------------------------------------------------
+  // MOVIE DATA
+  // --------------------------------------------------
+
   const [movie, setMovie] = useState(null);
 
-  // Loading / Error
+  // --------------------------------------------------
+  // LOADING / ERROR
+  // --------------------------------------------------
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Selected options
+  // --------------------------------------------------
+  // SELECTED OPTIONS
+  // --------------------------------------------------
+
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTheater, setSelectedTheater] = useState(null);
-  const [selectedTime, setSelectedTime] = useState(null);
+
+  // DEFAULT TIME = 16:40 PM
+  const [selectedTime, setSelectedTime] = useState("16:40 PM");
+
+  // --------------------------------------------------
+  // SEAT SELECTION
+  // --------------------------------------------------
+
+  const [seatModalOpen, setSeatModalOpen] = useState(false);
+  const [selectedSeats, setSelectedSeats] = useState([]);
 
   // --------------------------------------------------
   // FETCH MOVIE DETAILS
@@ -67,12 +85,6 @@ const MovieDetails = () => {
   };
 
   const dates = getNextSevenDays();
-
-  // --------------------------------------------------
-  // DEFAULT DATE
-  // --------------------------------------------------
-
-  
 
   // --------------------------------------------------
   // TIME OPTIONS
@@ -135,14 +147,48 @@ const MovieDetails = () => {
       return;
     }
 
+    // Open seat modal
+    setSelectedSeats([]);
+    setSeatModalOpen(true);
+  };
+
+  // --------------------------------------------------
+  // CONFIRM SEAT
+  // --------------------------------------------------
+
+  const handleConfirmSeats = () => {
+    if (selectedSeats.length !== 1) {
+      alert("Please select exactly 1 seat.");
+      return;
+    }
+
+    console.log("Movie:", movie);
+    console.log("Theater:", selectedTheater);
+    console.log("Date:", selectedDate);
+    console.log("Time:", selectedTime);
+    console.log("Selected Seat:", selectedSeats[0]);
+
+    setSeatModalOpen(false);
+
     navigate("/book-now", {
       state: {
         movie,
         date: selectedDate,
         theater: selectedTheater,
         time: selectedTime,
+        seats: selectedSeats,
+        seatCount: 1,
       },
     });
+  };
+
+  // --------------------------------------------------
+  // CLOSE SEAT MODAL
+  // --------------------------------------------------
+
+  const handleCloseSeatModal = () => {
+    setSeatModalOpen(false);
+    setSelectedSeats([]);
   };
 
   // --------------------------------------------------
@@ -216,7 +262,7 @@ const MovieDetails = () => {
 
   return (
     <main
-      className="h-screen overflow-y-auto hide-scrollbar"
+      className="relative h-screen overflow-y-auto hide-scrollbar"
       style={{
         background: pageBackground,
       }}
@@ -227,6 +273,7 @@ const MovieDetails = () => {
       {/* MAIN CONTENT */}
       <section className="px-6 pb-12 pt-5">
         <div className="mx-auto max-w-7xl">
+
           {/* BACK */}
           <button
             type="button"
@@ -242,10 +289,7 @@ const MovieDetails = () => {
             ← Back
           </button>
 
-          {/* ==================================================
-              LEFT + RIGHT
-          ================================================== */}
-
+          {/* LEFT + RIGHT */}
           <div
             className="
               grid
@@ -254,11 +298,13 @@ const MovieDetails = () => {
               lg:grid-cols-[1.1fr_0.9fr]
             "
           >
+
             {/* ==================================================
                 LEFT SIDE
             ================================================== */}
 
-            <div className="mt-3 translate-x--34 -translate-y-2 justify-start">
+            <div className="mt-3 -translate-y-2 justify-start">
+
               {/* DATE */}
 
               <h2
@@ -272,9 +318,9 @@ const MovieDetails = () => {
                 Date
               </h2>
 
-              {/* ALL 7 DATES IN ONE LINE */}
+              {/* ALL 7 DATES */}
 
-              <div className="flex flex-nowrap gap-3">
+              <div className="flex flex-nowrap gap-3 overflow-x-auto pb-2">
                 {dates.map((date, index) => {
                   const isSelected =
                     selectedDate?.toDateString() === date.toDateString();
@@ -305,9 +351,13 @@ const MovieDetails = () => {
                         }
                       `}
                     >
-                      <span className="font-medium">{formatDate(date)}</span>
+                      <span className="font-medium">
+                        {formatDate(date)}
+                      </span>
 
-                      <span className="mt-1 font-bold">{formatDay(date)}</span>
+                      <span className="mt-1 font-bold">
+                        {formatDay(date)}
+                      </span>
                     </button>
                   );
                 })}
@@ -332,7 +382,8 @@ const MovieDetails = () => {
               <div className="flex flex-wrap gap-3">
                 {movie?.theaters?.length > 0 ? (
                   movie.theaters.map((theater) => {
-                    const isSelected = selectedTheater?.id === theater.id;
+                    const isSelected =
+                      selectedTheater?.id === theater.id;
 
                     return (
                       <button
@@ -420,7 +471,8 @@ const MovieDetails = () => {
                 RIGHT SIDE
             ================================================== */}
 
-            <div className="w-full p--1">
+            <div className="w-full">
+
               {/* MOVIE IMAGE */}
 
               <div className="mb-5 flex -translate-x-24 -translate-y-12 justify-end">
@@ -437,10 +489,11 @@ const MovieDetails = () => {
                 />
               </div>
 
-              {/* CONTENT UNDER IMAGE */}
+              {/* CONTENT */}
 
               <div className="flex -translate-x-24 -translate-y-12 justify-end">
                 <div className="w-[320px] max-w-full">
+
                   {/* MOVIE NAME */}
 
                   <h1
@@ -484,6 +537,7 @@ const MovieDetails = () => {
                       text-sm
                     "
                   >
+
                     {/* Duration */}
 
                     <div className="flex w-full">
@@ -515,89 +569,252 @@ const MovieDetails = () => {
                         Type
                       </span>
 
-                      <span className="font-medium text-gray-800">2D</span>
+                      <span className="font-medium text-gray-800">
+                        2D
+                      </span>
                     </div>
                   </div>
 
-                  {/* BOOKING CARD */}
+                  {/* ==================================================
+                      BOOKING CARD
+                  ================================================== */}
 
-                  {/* ================= BOOKING CARD ================= */}
+                  <div
+                    className="
+                      mt-6
+                      min-h-[250px]
+                      w-full
+                      rounded-xl
+                      border
+                      border-[#1090DF]
+                      bg-white/80
+                      p-10
+                    "
+                  >
 
-<div
-  className="
-    mt-6
-    min-h-[250px]
-    w-full
-    rounded-xl
-    border
-    border-[#1090DF]
-    bg-white/80
-    p-10
-  "
->
-  {/* Selected Theater Name */}
-  {selectedTheater && (
-    <h2
-      className="
-        text-2xl
-        font-bold
-        leading-tight
-        whitespace-nowrap
-        overflow-hidden
-        text-ellipsis
-      "
-      style={{ color: "#1090DF" }}
-      title={selectedTheater.name}
-    >
-      {selectedTheater.name}
-    </h2>
-  )}
+                    {/* SELECTED THEATER */}
 
-  {/* Selected Date */}
-  <p className="mt-4 text-base text-gray-600">
-    {formatFullDate(selectedDate)}
-  </p>
+                    {selectedTheater && (
+                      <h2
+                        className="
+                          overflow-hidden
+                          text-2xl
+                          font-bold
+                          leading-tight
+                          whitespace-nowrap
+                          text-ellipsis
+                        "
+                        style={{ color: "#1090DF" }}
+                        title={selectedTheater.name}
+                      >
+                        {selectedTheater.name}
+                      </h2>
+                    )}
 
-  {/* Selected Time */}
-  <p className="mt-1 text-base text-gray-600">
-    {selectedTime || "Select a time"}
-  </p>
+                    {/* DATE */}
 
-  {/* Note */}
-  <p className="mt-4 text-xs text-gray-500">
-    *Seat selection can be done after this
-  </p>
+                    <p className="mt-4 text-base text-gray-600">
+                      {formatFullDate(selectedDate)}
+                    </p>
 
-  {/* BOOK NOW */}
-  <button
-    type="button"
-    onClick={handleBookNow}
-    className="
-      mt-5
-      w-full
-      rounded-md
-      border
-      border-[#1090DF]
-      bg-white
-      py-3
-      text-sm
-      font-medium
-      text-[#1090DF]
-      transition-all
-      duration-200
-      hover:bg-[#1090DF]
-      hover:text-white
-    "
-  >
-    Book Now
-  </button>
-</div>
+                    {/* TIME */}
+
+                    <p className="mt-1 text-base text-gray-600">
+                      {selectedTime || "Select a time"}
+                    </p>
+
+                    {/* NOTE */}
+
+                    <p className="mt-4 text-xs text-gray-500">
+                      *Select your seat before booking
+                    </p>
+
+                    {/* BOOK NOW */}
+
+                    <button
+                      type="button"
+                      onClick={handleBookNow}
+                      className="
+                        mt-5
+                        w-full
+                        rounded-md
+                        border
+                        border-[#1090DF]
+                        bg-white
+                        py-3
+                        text-sm
+                        font-medium
+                        text-[#1090DF]
+                        transition-all
+                        duration-200
+                        hover:bg-[#1090DF]
+                        hover:text-white
+                      "
+                    >
+                      Book Now
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      {/* ==========================================================
+          SEAT SELECTION MODAL
+      ========================================================== */}
+
+      {seatModalOpen && (
+        <div
+          className="
+            fixed
+            inset-0
+            z-[999]
+            flex
+            items-center
+            justify-center
+            bg-black/30
+            px-4
+            backdrop-blur-[1px]
+          "
+          onClick={handleCloseSeatModal}
+        >
+
+          {/* MODAL */}
+
+          <div
+            className="
+              w-full
+              max-w-[400px]
+              rounded-2xl
+              bg-white
+              p-7
+              shadow-2xl
+            "
+            onClick={(event) => event.stopPropagation()}
+          >
+
+            {/* TITLE */}
+
+            <h2
+              className="text-center text-2xl font-bold"
+              style={{ color: "#1090DF" }}
+            >
+              How many seats?
+            </h2>
+
+            {/* SMALL DESCRIPTION */}
+
+            <p className="mt-2 text-center text-sm text-gray-500">
+              Select exactly one seat
+            </p>
+
+            {/* ==================================================
+                SEAT NUMBERS
+            ================================================== */}
+
+            <div className="mt-7 grid grid-cols-5 justify-items-center gap-3">
+              {Array.from({ length: 10 }, (_, index) => index + 1).map(
+                (seatNumber) => {
+                  const isSelected =
+                    selectedSeats.includes(seatNumber);
+
+                  return (
+                    <button
+                      key={seatNumber}
+                      type="button"
+
+                      // ONLY ONE SEAT
+                      onClick={() => {
+                        setSelectedSeats([seatNumber]);
+                      }}
+
+                      className={`
+                        flex
+                        h-[48px]
+                        w-[48px]
+                        items-center
+                        justify-center
+                        rounded-md
+                        border
+                        text-sm
+                        font-medium
+                        transition-all
+                        duration-200
+
+                        ${
+                          isSelected
+                            ? "border-[#1090DF] bg-[#1090DF] text-white"
+                            : "border-gray-300 bg-white text-gray-700 hover:border-[#1090DF] hover:bg-[#C2E8FF] hover:text-[#1090DF]"
+                        }
+                      `}
+                    >
+                      {seatNumber}
+                    </button>
+                  );
+                }
+              )}
+            </div>
+
+            {/* ==================================================
+                BUTTONS
+            ================================================== */}
+
+            <div className="mt-7 flex justify-center gap-3">
+
+              {/* CANCEL */}
+
+              <button
+                type="button"
+                onClick={handleCloseSeatModal}
+                className="
+                  min-w-[100px]
+                  rounded-md
+                  border
+                  border-gray-300
+                  bg-white
+                  px-5
+                  py-2.5
+                  text-sm
+                  font-medium
+                  text-gray-500
+                  transition
+                  hover:bg-gray-100
+                "
+              >
+                Cancel
+              </button>
+
+              {/* SELECT SEAT */}
+
+              <button
+                type="button"
+                onClick={handleConfirmSeats}
+                disabled={selectedSeats.length !== 1}
+                className={`
+                  min-w-[120px]
+                  rounded-md
+                  border
+                  px-5
+                  py-2.5
+                  text-sm
+                  font-medium
+                  transition
+
+                  ${
+                    selectedSeats.length !== 1
+                      ? "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-400"
+                      : "border-[#1090DF] bg-white text-[#1090DF] hover:bg-[#1090DF] hover:text-white"
+                  }
+                `}
+              >
+                Select seat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 };

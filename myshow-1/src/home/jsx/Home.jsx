@@ -85,7 +85,26 @@ const Home = () => {
   // MOVIE CLICK
   // ==============================
   const handleMovieClick = (movieId) => {
+    if (!movieId) {
+      console.error("Movie ID is missing");
+      return;
+    }
+
     navigate(`/movie/${movieId}`);
+  };
+
+  // ==============================
+  // THEATER CLICK
+  // ==============================
+  const handleTheaterClick = (theaterId) => {
+    if (!theaterId) {
+      console.error("Theater ID is missing");
+      return;
+    }
+
+    console.log("Opening Theater:", theaterId);
+
+    navigate(`/theaters/${theaterId}`);
   };
 
   // ==============================
@@ -246,20 +265,20 @@ const Home = () => {
                             handleMovieClick(movieId)
                           }
                           className="
+                            group
                             cursor-pointer
-                            overflow-hidden
-                            rounded-xl
-                            bg-white
-                            shadow-sm
-                            transition-all
-                            duration-200
-                            hover:-translate-y-1
-                            hover:shadow-lg
                           "
                         >
-
                           {/* IMAGE */}
-                          <div className="h-72 w-full overflow-hidden bg-gray-100">
+                          <div
+                            className="
+                              h-72
+                              w-full
+                              overflow-hidden
+                              rounded-xl
+                              bg-gray-100
+                            "
+                          >
                             {image ? (
                               <img
                                 src={image}
@@ -268,6 +287,10 @@ const Home = () => {
                                   h-full
                                   w-full
                                   object-cover
+                                  transition-transform
+                                  duration-300
+                                  ease-out
+                                  group-hover:scale-110
                                 "
                               />
                             ) : (
@@ -286,8 +309,8 @@ const Home = () => {
                             )}
                           </div>
 
-                          {/* MOVIE INFO */}
-                          <div className="p-4">
+                          {/* MOVIE TITLE */}
+                          <div className="pt-3 text-center">
                             <h2
                               className="
                                 truncate
@@ -295,11 +318,11 @@ const Home = () => {
                                 font-semibold
                                 text-[#1090DF]
                               "
+                              title={title}
                             >
                               {title}
                             </h2>
                           </div>
-
                         </div>
                       );
                     })}
@@ -348,6 +371,14 @@ const Home = () => {
                 theaters.length > 0 &&
                 theaters.map((theater, index) => {
 
+                  // ==============================
+                  // THEATER ID
+                  // ==============================
+                  const theaterId =
+                    theater.id ||
+                    theater.theaterId ||
+                    theater._id;
+
                   const name =
                     theater.name ||
                     theater.theaterName ||
@@ -368,32 +399,42 @@ const Home = () => {
 
                   return (
                     <div
-                      key={
-                        theater.id ||
-                        theater._id ||
-                        index
+                      key={theaterId || index}
+                      onClick={() =>
+                        handleTheaterClick(theaterId)
                       }
-                     className="
-  group
-  flex
-  min-h-[66px]
-  w-full
-  items-center
-  justify-between
-  rounded-md
-  border
-  border-gray-200
-  bg-white/40
-  px-3
-  py-2
-  transition-all
-  duration-200
-  hover:scale-[1.02]
-  hover:border-[#1090DF]
-  hover:bg-[#C2E8FF]
-
-  hover:shadow-md
-"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (
+                          event.key === "Enter" ||
+                          event.key === " "
+                        ) {
+                          event.preventDefault();
+                          handleTheaterClick(theaterId);
+                        }
+                      }}
+                      className="
+                        group
+                        flex
+                        min-h-[66px]
+                        w-full
+                        cursor-pointer
+                        items-center
+                        justify-between
+                        rounded-md
+                        border
+                        border-gray-200
+                        bg-white/40
+                        px-3
+                        py-2
+                        transition-all
+                        duration-200
+                        hover:scale-[1.02]
+                        hover:border-[#1090DF]
+                        hover:bg-[#C2E8FF]
+                        hover:shadow-md
+                      "
                     >
 
                       {/* ==============================
@@ -464,12 +505,9 @@ const Home = () => {
                             </p>
 
                             {pincode && (
-                              <p>
-                                {pincode}
-                              </p>
+                              <p>{pincode}</p>
                             )}
                           </div>
-
                         </div>
                       </div>
 
@@ -478,6 +516,10 @@ const Home = () => {
                       ============================== */}
                       <button
                         type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleTheaterClick(theaterId);
+                        }}
                         className="
                           ml-4
                           shrink-0
@@ -495,10 +537,8 @@ const Home = () => {
                     </div>
                   );
                 })}
-
             </div>
           )}
-
         </div>
       </section>
     </main>
