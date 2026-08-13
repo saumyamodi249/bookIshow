@@ -7,6 +7,12 @@ import {
   getTheaterShows,
 } from "../js/TheaterDetails";
 
+// =====================================================
+// SEAT SELECTION COMPONENT
+// =====================================================
+
+import SeatSelection from "../../common/SeatSelection.jsx";
+
 const TheaterDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -24,6 +30,13 @@ const TheaterDetails = () => {
   const [loading, setLoading] = useState(true);
   const [showsLoading, setShowsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // =====================================================
+  // SEAT SELECTION
+  // =====================================================
+
+  const [seatModalOpen, setSeatModalOpen] = useState(false);
+  const [selectedSeats, setSelectedSeats] = useState([]);
 
   // =====================================================
   // BACKGROUND
@@ -301,6 +314,91 @@ const TheaterDetails = () => {
     theater?.location ||
     theater?.city ||
     "123 Main Street, Springfield, USA";
+
+  // =====================================================
+  // BOOK NOW
+  // =====================================================
+
+  const handleBookNow = (movie, movieId, selectedTime) => {
+    if (!selectedDate) {
+      alert("Please select a date");
+      return;
+    }
+
+    if (!selectedTime) {
+      alert("Please select a time");
+      return;
+    }
+
+    // Save the movie/show information
+    setSelectedSeats([]);
+
+    // Store booking information temporarily
+    setBookingMovie(movie);
+    setBookingMovieId(movieId);
+    setBookingTime(selectedTime);
+
+    // Open SeatSelection modal
+    setSeatModalOpen(true);
+  };
+
+  // =====================================================
+  // BOOKING INFORMATION
+  // =====================================================
+
+  const [bookingMovie, setBookingMovie] = useState(null);
+  const [bookingMovieId, setBookingMovieId] = useState(null);
+  const [bookingTime, setBookingTime] = useState("");
+
+  // =====================================================
+  // CONFIRM SEAT
+  // =====================================================
+
+  const handleConfirmSeats = (numberOfSeats) => {
+    if (!numberOfSeats) {
+      return;
+    }
+
+    console.log("Theater ID:", id);
+    console.log("Movie:", bookingMovie);
+    console.log("Movie ID:", bookingMovieId);
+    console.log("Theater:", theater);
+    console.log("Date:", selectedDate);
+    console.log("Time:", bookingTime);
+    console.log("Selected Seat:", numberOfSeats);
+
+    // Close modal
+    setSeatModalOpen(false);
+
+    // Go to booking page
+    navigate("/book-now", {
+      state: {
+        movie: bookingMovie,
+        movieId: bookingMovieId,
+
+        theaterId: id,
+        theater: theater,
+
+        date: selectedDate,
+        time: bookingTime,
+
+        seats: [numberOfSeats],
+        seatCount: 1,
+      },
+    });
+
+    // Reset
+    setSelectedSeats([]);
+  };
+
+  // =====================================================
+  // CLOSE SEAT MODAL
+  // =====================================================
+
+  const handleCloseSeatModal = () => {
+    setSeatModalOpen(false);
+    setSelectedSeats([]);
+  };
 
   // =====================================================
   // LOADING
@@ -598,6 +696,7 @@ const TheaterDetails = () => {
                     text-xs
                     transition
                     duration-200
+
                     ${
                       isSelected
                         ? `
@@ -925,6 +1024,7 @@ const TheaterDetails = () => {
                                       text-sm
                                       transition
                                       duration-200
+
                                       ${
                                         isSelected
                                           ? `
@@ -979,37 +1079,45 @@ const TheaterDetails = () => {
                         <button
                           type="button"
                           disabled={!selectedTime}
-                          onClick={() => {
-                            console.log(
-                              "BOOK NOW",
-                              {
-                                theaterId: id,
-                                movieId,
-                                date: selectedDate,
-                                time: selectedTime,
-                              }
-                            );
-                          }}
-                      className="
-                        mt-11
-                        w-full
-                        rounded-md
-                        border
-                        border-[#1090DF]
-                        bg-white
-                        px-14
-                        py-3
-                        text-md
-                        font-medium
-                        text-[#1090DF]
-                        transition-all
-                        duration-200
-                        hover:bg-[#1090DF]
-                        hover:text-white
-                      "
-                    >
-                      Book Now
-                    </button>
+                          onClick={() =>
+                            handleBookNow(
+                              movie,
+                              movieId,
+                              selectedTime
+                            )
+                          }
+                          className={`
+                            mt-11
+                            w-full
+                            rounded-md
+                            border
+                            px-14
+                            py-3
+                            text-sm
+                            font-medium
+                            transition-all
+                            duration-200
+
+                            ${
+                              selectedTime
+                                ? `
+                                  border-[#1090DF]
+                                  bg-white
+                                  text-[#1090DF]
+                                  hover:bg-[#1090DF]
+                                  hover:text-white
+                                `
+                                : `
+                                  cursor-not-allowed
+                                  border-gray-200
+                                  bg-gray-100
+                                  text-gray-400
+                                `
+                            }
+                          `}
+                        >
+                          Book Now
+                        </button>
                       </div>
 
                     </div>
@@ -1022,6 +1130,20 @@ const TheaterDetails = () => {
 
         </div>
       </section>
+
+      {/* ==========================================================
+          SEAT SELECTION
+          
+          SeatSelection.jsx common component handle karega.
+          TheaterDetails ke andar seat modal ka actual UI nahi hai.
+      ========================================================== */}
+
+      <SeatSelection
+        isOpen={seatModalOpen}
+        onClose={handleCloseSeatModal}
+        onConfirm={handleConfirmSeats}
+      />
+
     </main>
   );
 };
