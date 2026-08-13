@@ -7,9 +7,13 @@ const SeatSelection = ({ isOpen, onClose, onConfirm }) => {
     return null;
   }
 
-  const seats = Array.from({ length: 10 }, (_, index) => index + 1);
+  const seats = Array.from(
+    { length: 10 },
+    (_, index) => index + 1
+  );
 
   const handleSeatSelect = (seatNumber) => {
+    // ONLY ONE SEAT CAN BE SELECTED
     setSelectedSeats(seatNumber);
   };
 
@@ -36,51 +40,60 @@ const SeatSelection = ({ isOpen, onClose, onConfirm }) => {
         flex
         items-center
         justify-center
-        bg-black/30
+        bg-black/35
         px-4
         backdrop-blur-[1px]
       "
       onClick={handleClose}
     >
       {/* MODAL */}
-
       <div
         className="
           w-full
           max-w-[400px]
           rounded-2xl
           bg-white
-          p-7
+          px-7
+          py-7
           shadow-2xl
         "
         onClick={(event) => event.stopPropagation()}
       >
         {/* TITLE */}
-
         <h2
-          className="text-center text-2xl font-bold"
+          className="
+            text-center
+            text-2xl
+            font-bold
+          "
           style={{ color: "#1090DF" }}
         >
           How many seats?
         </h2>
 
-        {/* SMALL DESCRIPTION */}
-
-        <p className="mt-2 text-center text-sm text-gray-500">
-          Select exactly one seat
-        </p>
-
         {/* SEAT NUMBERS */}
-
-        <div className="mt-7 grid grid-cols-5 justify-items-center gap-3">
+        <div
+          className="
+            mx-auto
+            mt-8
+            grid
+            max-w-[300px]
+            grid-cols-5
+            justify-items-center
+            gap-4
+          "
+        >
           {seats.map((seatNumber) => {
-            const isSelected = selectedSeats === seatNumber;
+            const isSelected =
+              selectedSeats === seatNumber;
 
             return (
               <button
                 key={seatNumber}
                 type="button"
-                onClick={() => handleSeatSelect(seatNumber)}
+                onClick={() =>
+                  handleSeatSelect(seatNumber)
+                }
                 className={`
                   flex
                   h-[48px]
@@ -96,8 +109,20 @@ const SeatSelection = ({ isOpen, onClose, onConfirm }) => {
 
                   ${
                     isSelected
-                      ? "border-[#1090DF] bg-[#1090DF] text-white"
-                      : "border-gray-300 bg-white text-gray-700 hover:border-[#1090DF] hover:bg-[#C2E8FF] hover:text-[#1090DF]"
+                      ? `
+                        border-[#1090DF]
+                        bg-[#1090DF]
+                        text-white
+                        shadow-md
+                      `
+                      : `
+                        border-gray-300
+                        bg-white
+                        text-gray-700
+                        hover:border-[#1090DF]
+                        hover:bg-[#C2E8FF]
+                        hover:text-[#1090DF]
+                      `
                   }
                 `}
               >
@@ -108,15 +133,21 @@ const SeatSelection = ({ isOpen, onClose, onConfirm }) => {
         </div>
 
         {/* BUTTONS */}
-
-        <div className="mt-7 flex justify-center gap-3">
+        <div
+          className="
+            mt-8
+            flex
+            items-center
+            justify-center
+            gap-3
+          "
+        >
           {/* CANCEL */}
-
           <button
             type="button"
             onClick={handleClose}
             className="
-              min-w-[100px]
+              min-w-[125px]
               rounded-md
               border
               border-gray-300
@@ -134,13 +165,12 @@ const SeatSelection = ({ isOpen, onClose, onConfirm }) => {
           </button>
 
           {/* SELECT SEAT */}
-
           <button
             type="button"
-            onClick={handleConfirm}
             disabled={selectedSeats < 1}
+            onClick={handleConfirm}
             className={`
-              min-w-[120px]
+              min-w-[125px]
               rounded-md
               border
               px-5
@@ -150,9 +180,20 @@ const SeatSelection = ({ isOpen, onClose, onConfirm }) => {
               transition
 
               ${
-                selectedSeats < 1
-                  ? "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-400"
-                  : "border-[#1090DF] bg-white text-[#1090DF] hover:bg-[#1090DF] hover:text-white"
+                selectedSeats >= 1
+                  ? `
+                    border-[#1090DF]
+                    bg-white
+                    text-[#1090DF]
+                    hover:bg-[#1090DF]
+                    hover:text-white
+                  `
+                  : `
+                    cursor-not-allowed
+                    border-gray-300
+                    bg-gray-100
+                    text-gray-400
+                  `
               }
             `}
           >
