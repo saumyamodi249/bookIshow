@@ -9,39 +9,47 @@ import MovieDetails from "./home/jsx/MovieDetails.jsx";
 import Theater from "./home/jsx/Theater.jsx";
 import TheaterDetails from "./home/jsx/TheaterDetails.jsx";
 
+import Screen from "./screen/Screen.jsx";
+
+import PaymentSuccess from "./common/PaymentSuccess.jsx";
+import BookingDetail from "./common/BookingDetail.jsx";
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* =========================
-            AUTH
-        ========================= */}
+        {/* AUTH */}
         <Route path="/" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
 
-        {/* =========================
-            MAIN
-        ========================= */}
+        {/* HOME */}
         <Route path="/home" element={<Home />} />
         <Route path="/my-ticket" element={<MyTicket />} />
 
-        {/* =========================
-            MOVIE DETAILS
-        ========================= */}
+        {/* MOVIE */}
         <Route path="/movie/:id" element={<MovieDetails />} />
 
-        {/* =========================
-            THEATER LIST
-        ========================= */}
+        {/* THEATER */}
         <Route path="/theaters" element={<Theater />} />
+        <Route path="/theaters/:id" element={<TheaterDetails />} />
 
-        {/* =========================
-            THEATER DETAILS
-        ========================= */}
+        {/* SEAT SELECTION */}
         <Route
-          path="/theaters/:id"
-          element={<TheaterDetails />}
+          path="/screen/:screenId"
+          element={<Screen />}
+        />
+
+        {/* BOOKING DETAIL */}
+        <Route
+          path="/booking-detail"
+          element={<BookingDetail />}
+        />
+
+        {/* PAYMENT SUCCESS */}
+        <Route
+          path="/payment-success"
+          element={<PaymentSuccess />}
         />
 
       </Routes>

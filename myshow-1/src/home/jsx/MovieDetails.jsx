@@ -3,45 +3,37 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import Navbar from "./Navbar";
 import { getMovieDetails } from "../js/MovieDetails";
-
+import {
+  getTheaterShows,
+  getScreenById,
+  getShowTimesByDate,
+} from "../js/Theater";
 import SeatSelection from "../../common/SeatSelection.jsx";
 
 const MovieDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // --------------------------------------------------
-  // MOVIE DATA
-  // --------------------------------------------------
-
   const [movie, setMovie] = useState(null);
-
-  // --------------------------------------------------
-  // LOADING / ERROR
-  // --------------------------------------------------
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // --------------------------------------------------
-  // SELECTED OPTIONS
-  // --------------------------------------------------
-
   const [selectedDate, setSelectedDate] = useState(new Date());
+
   const [selectedTheater, setSelectedTheater] = useState(null);
-
-  // DEFAULT TIME = 16:40 PM
-  const [selectedTime, setSelectedTime] = useState("16:40 PM");
-
-  // --------------------------------------------------
-  // SEAT SELECTION MODAL
-  // --------------------------------------------------
+  const [selectedScreen, setSelectedScreen] = useState(null);
+  const [showTimes, setShowTimes] = useState([]);
+  const [selectedTime, setSelectedTime] = useState(null);
 
   const [seatModalOpen, setSeatModalOpen] = useState(false);
 
-  // --------------------------------------------------
-  // FETCH MOVIE DETAILS
-  // --------------------------------------------------
+  const [theaterId, setTheaterId] = useState("");
+
+  const [timelist, setTimelist] = useState([]);
+
+  // =====================================================
+  // GET MOVIE DETAILS
+  // =====================================================
 
   useEffect(() => {
     const fetchMovieDetails = async () => {
@@ -49,19 +41,28 @@ const MovieDetails = () => {
         setLoading(true);
         setError("");
 
-        const data = await getMovieDetails(id);
+        const response = await getMovieDetails(id);
 
-        setMovie(data);
+        let movieData = null;
 
-        if (data?.theaters?.length > 0) {
-          setSelectedTheater(data.theaters[0]);
+        if (response?.data && Array.isArray(response.data)) {
+          movieData =
+            response.data.find((item) => String(item?.id) === String(id)) ||
+            response.data[0];
+        } else if (response?.data && !Array.isArray(response.data)) {
+          movieData = response.data;
+        } else {
+          movieData = response;
         }
-      } catch (err) {
-        console.error("Movie Details API Error:", err);
 
-        setError(
-          err.message || "Failed to load movie details"
-        );
+        setMovie(movieData);
+
+        if (movieData?.theaters?.length > 0) {
+          setSelectedTheater(movieData.theaters[0]);
+        }
+       
+      } catch (err) {
+        setError(err?.message || "Failed to load movie details");
       } finally {
         setLoading(false);
       }
@@ -72,9 +73,9 @@ const MovieDetails = () => {
     }
   }, [id]);
 
-  // --------------------------------------------------
+  // =====================================================
   // NEXT 7 DAYS
-  // --------------------------------------------------
+  // =====================================================
 
   const getNextSevenDays = () => {
     const days = [];
@@ -93,57 +94,126 @@ const MovieDetails = () => {
 
   const dates = getNextSevenDays();
 
-  // --------------------------------------------------
-  // TIME OPTIONS
-  // --------------------------------------------------
+  // =====================================================
+  // DATE FORMAT FOR API
+  // MM-DD-YYYY
+  // =====================================================
 
-  const times = [
-    "16:40 PM",
-    "18:40 PM",
-    "21:25 PM",
-    "23:20 PM",
-  ];
+  const formatApiDate = (date) => {
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const year = date.getFullYear();
 
-  // --------------------------------------------------
-  // FORMAT DATE
-  // --------------------------------------------------
+    return `${month}-${day}-${year}`;
+  };
 
-  const formatDate = (date) => {
-    return date.toLocaleDateString("en-GB", {
+  // =====================================================
+  // FETCH SHOW TIMES
+  // =====================================================
+  useEffect(() => {
+    const fetchShowTimes = async () => {
+      if (!selectedTheater?.id || !movie?.id) {
+        setShowTimes([]);
+        setTimelist([]);
+        setSelectedTime(null);
+        return;
+      }
+
+      try {
+        const date = formatApiDate(selectedDate);
+
+        const response = await getTheaterShows(
+          String(selectedTheater.id),
+          date,
+        );
+    
+        const moviesList = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.data)
+            ? response.data
+            : [];
+
+        // IMPORTANT:
+        // Sirf currently selected movie ko find karo
+        const currentMovie = moviesList.find((item) => {
+          const apiMovieId = item?.id || item?.movieId || item?.movie?.id;
+
+          return String(apiMovieId) === String(movie.id);
+        });
+
+        // Sirf selected movie ke showTimes
+        const apiShowTimes = Array.isArray(currentMovie?.showTimes)
+          ? currentMovie.showTimes
+          : [];
+
+        setShowTimes(apiShowTimes);
+        setTimelist(apiShowTimes);
+
+        // First time default selected
+        if (apiShowTimes.length > 0) {
+          setSelectedTime(apiShowTimes[0]);
+        } else {
+          setSelectedTime(null);
+        }
+      } catch (err) {
+        setShowTimes([]);
+        setTimelist([]);
+        setSelectedTime(null);
+      }
+    };
+
+    fetchShowTimes();
+  }, [selectedTheater, selectedDate, movie]);
+
+  // =====================================================
+  // FORMAT SHOW TIME
+  // =====================================================
+
+  const formatShowTime = (startTime) => {
+    if (!startTime) {
+      return "--:--";
+    }
+
+    const date = new Date(startTime);
+
+    if (Number.isNaN(date.getTime())) {
+      return "--:--";
+    }
+
+    return date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
+
+  // =====================================================
+  // DATE DISPLAY
+  // =====================================================
+
+  const formatDate = (date) =>
+    date.toLocaleDateString("en-GB", {
       day: "2-digit",
       month: "short",
     });
-  };
 
-  // --------------------------------------------------
-  // FORMAT DAY
-  // --------------------------------------------------
-
-  const formatDay = (date) => {
-    return date.toLocaleDateString("en-US", {
+  const formatDay = (date) =>
+    date.toLocaleDateString("en-US", {
       weekday: "short",
     });
-  };
 
-  // --------------------------------------------------
-  // FULL DATE
-  // --------------------------------------------------
-
-  const formatFullDate = (date) => {
-    if (!date) return "";
-
-    return date.toLocaleDateString("en-GB", {
+  const formatFullDate = (date) =>
+    date.toLocaleDateString("en-GB", {
       day: "numeric",
       month: "long",
       year: "numeric",
     });
-  };
 
-  // --------------------------------------------------
+  // =====================================================
   // BOOK NOW
-  // --------------------------------------------------
+  // =====================================================
 
-  const handleBookNow = () => {
+  const handleBookNow = async () => {
     if (!selectedDate) {
       alert("Please select a date");
       return;
@@ -159,47 +229,116 @@ const MovieDetails = () => {
       return;
     }
 
-    // Open SeatSelection component
-    setSeatModalOpen(true);
+    try {
+      // 1. Convert selected date into API format
+      const date = formatApiDate(selectedDate);
+
+      // 2. Get showtimes for this movie on selected date
+      const byDateData = await getShowTimesByDate(movie.id, date);
+
+
+      // 3. Get theaters list
+      const theatersList = Array.isArray(byDateData)
+        ? byDateData
+        : Array.isArray(byDateData?.theaters)
+          ? byDateData.theaters
+          : [];
+
+      // 4. Find selected theater
+      const matchedTheater = theatersList.find(
+        (theater) => String(theater.id) === String(selectedTheater.id),
+      );
+
+      if (!matchedTheater) {
+        throw new Error("Could not find selected theater for this date.");
+      }
+
+
+      // 5. Find selected showtime
+      const matchedShowtime = (matchedTheater.showtimes || []).find(
+        (show) =>
+          String(show.showTimeId || show.id) === String(selectedTime.id),
+      );
+
+      if (!matchedShowtime) {
+        throw new Error("Could not find selected showtime.");
+      }
+
+
+      // 6. Get screen ID
+      const screenId = matchedShowtime.screenId;
+
+      if (!screenId) {
+        throw new Error("No screen assigned to this showtime.");
+      }
+
+
+      // 7. Get complete screen data
+      const screenData = await getScreenById(screenId);
+
+
+      // 8. Save screen data
+      setSelectedScreen(screenData?.data || screenData);
+
+      // 9. Open seat selection
+      setSeatModalOpen(true);
+    } catch (err) {
+      alert(err.message || "Failed to start booking.");
+    }
   };
 
-  // --------------------------------------------------
-  // CONFIRM SEAT
-  // --------------------------------------------------
+  // =====================================================
+  // CONFIRM SEATS
+  // =====================================================
 
   const handleConfirmSeats = (numberOfSeats) => {
-    console.log("Movie:", movie);
-    console.log("Theater:", selectedTheater);
-    console.log("Date:", selectedDate);
-    console.log("Time:", selectedTime);
-    console.log("Selected Seats:", numberOfSeats);
-
-    // Close seat modal
     setSeatModalOpen(false);
 
-    // NEXT BOOKING PAGE
-    navigate("/book-now", {
+    const screenId =
+      selectedScreen?.screen?.id ||
+      selectedScreen?.screen?._id ||
+      selectedScreen?.screen?.screenId ||
+      selectedScreen?.id ||
+      selectedScreen?._id ||
+      null;
+
+    if (!screenId) {
+    
+      return;
+    }
+
+    
+
+    navigate(`/screen/${selectedTheater.id}`, {
       state: {
         movie,
+
         date: selectedDate,
+
         theater: selectedTheater,
-        time: selectedTime,
+
+        theaterId: selectedTheater?.id || null,
+
+        time: selectedTime?.startTime,
+
         seatCount: numberOfSeats,
+
+        showTimeId: selectedTime?.id || null,
+
+        showTime: selectedTime || null,
+
+        // ⭐ IMPORTANT
+        screenId: screenId,
+
+        // ⭐ COMPLETE SCREEN DATA
+        screen: selectedScreen,
       },
     });
   };
 
-  // --------------------------------------------------
-  // CLOSE SEAT MODAL
-  // --------------------------------------------------
-
-  const handleCloseSeatModal = () => {
-    setSeatModalOpen(false);
-  };
-
-  // --------------------------------------------------
+  // =====================================================
   // BACKGROUND
-  // --------------------------------------------------
+  // =====================================================
 
   const pageBackground = `
     radial-gradient(
@@ -217,14 +356,14 @@ const MovieDetails = () => {
     #ffffff
   `;
 
-  // --------------------------------------------------
+  // =====================================================
   // LOADING
-  // --------------------------------------------------
+  // =====================================================
 
   if (loading) {
     return (
       <main
-        className="h-screen overflow-y-auto hide-scrollbar"
+        className="h-screen"
         style={{
           background: pageBackground,
         }}
@@ -232,22 +371,20 @@ const MovieDetails = () => {
         <Navbar />
 
         <div className="flex min-h-[70vh] items-center justify-center">
-          <p className="text-gray-500">
-            Loading movie details...
-          </p>
+          <p className="text-gray-500">Loading movie details...</p>
         </div>
       </main>
     );
   }
 
-  // --------------------------------------------------
+  // =====================================================
   // ERROR
-  // --------------------------------------------------
+  // =====================================================
 
   if (error) {
     return (
       <main
-        className="h-screen overflow-y-auto hide-scrollbar"
+        className="h-screen"
         style={{
           background: pageBackground,
         }}
@@ -255,22 +392,12 @@ const MovieDetails = () => {
         <Navbar />
 
         <div className="flex min-h-[70vh] flex-col items-center justify-center">
-          <p className="mb-4 text-red-500">
-            {error}
-          </p>
+          <p className="mb-4 text-red-500">{error}</p>
 
           <button
             type="button"
             onClick={() => navigate("/home")}
-            className="
-              rounded-lg
-              bg-[#1090DF]
-              px-6
-              py-3
-              text-sm
-              font-semibold
-              text-white
-            "
+            className="rounded-lg bg-[#1090DF] px-6 py-3 text-white"
           >
             Back to Home
           </button>
@@ -279,198 +406,98 @@ const MovieDetails = () => {
     );
   }
 
-  // --------------------------------------------------
-  // MAIN PAGE
-  // --------------------------------------------------
+  // =====================================================
+  // MAIN
+  // =====================================================
 
   return (
     <main
-      className="
-        relative
-        h-screen
-        overflow-y-auto
-        hide-scrollbar
-      "
+      className="relative h-screen overflow-y-auto hide-scrollbar"
       style={{
         background: pageBackground,
       }}
     >
-      {/* ==================================================
-          NAVBAR
-      ================================================== */}
-
       <Navbar />
-
-      {/* ==================================================
-          MAIN CONTENT
-      ================================================== */}
 
       <section className="px-6 pb-12 pt-5">
         <div className="mx-auto max-w-7xl">
-
-          {/* ==================================================
-              BACK
-          ================================================== */}
+          {/* BACK */}
 
           <button
             type="button"
             onClick={() => navigate("/home")}
-            className="
-              mb-5
-              text-sm
-              text-gray-400
-              transition
-              hover:text-[#1090DF]
-            "
+            className="mb-5 text-sm text-gray-400 hover:text-[#1090DF]"
           >
             ← Back
           </button>
 
-          {/* ==================================================
-              LEFT + RIGHT
-          ================================================== */}
-
-          <div
-            className="
-              grid
-              grid-cols-1
-              gap-8
-              lg:grid-cols-[1.1fr_0.9fr]
-            "
-          >
-
-            {/* ==================================================
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+            {/* =====================================================
                 LEFT SIDE
-            ================================================== */}
+            ===================================================== */}
 
-            <div className="mt-3 -translate-y-2 justify-start">
-
-              {/* ==================================================
+            <div className="mt-3">
+              {/* =================================================
                   DATE
-              ================================================== */}
+              ================================================= */}
 
-              <h2
-                className="
-                  mb-5
-                  text-2xl
-                  font-bold
-                "
-                style={{
-                  color: "#1090DF",
-                }}
-              >
-                Date
-              </h2>
+              <h2 className="mb-5 text-2xl font-bold text-[#1090DF]">Date</h2>
 
-              {/* ALL 7 DATES */}
-
-              <div
-                className="
-                  flex
-                  flex-nowrap
-                  gap-3
-                  overflow-x-auto
-                  pb-2
-                "
-              >
+              <div className="flex flex-nowrap gap-3 overflow-x-auto pb-2">
                 {dates.map((date, index) => {
-                  const isSelected =
-                    selectedDate?.toDateString() ===
-                    date.toDateString();
+                  const selected =
+                    selectedDate.toDateString() === date.toDateString();
 
                   return (
                     <button
                       key={index}
                       type="button"
-                      onClick={() =>
-                        setSelectedDate(date)
-                      }
-                      className={`
-                        flex
-                        h-[72px]
-                        w-[82px]
-                        shrink-0
-                        flex-col
-                        items-center
-                        justify-center
-                        rounded-lg
-                        border
-                        text-sm
-                        transition-all
-                        duration-200
-
-                        ${
-                          isSelected
-                            ? "border-[#1090DF] bg-[#1090DF] text-white"
-                            : "border-gray-300 bg-white text-gray-700 hover:border-[#1090DF]"
-                        }
-                      `}
+                      onClick={() => {
+                        setSelectedDate(date);
+                        setSelectedTime(null);
+                      }}
+                      className={`flex h-18 w-20.5 shrink-0 flex-col items-center justify-center rounded-lg border text-sm ${
+                        selected
+                          ? "border-[#1090DF] bg-[#1090DF] text-white"
+                          : "border-gray-300 bg-white text-gray-700"
+                      }`}
                     >
-                      <span className="font-medium">
-                        {formatDate(date)}
-                      </span>
+                      <span>{formatDate(date)}</span>
 
-                      <span className="mt-1 font-bold">
-                        {formatDay(date)}
-                      </span>
+                      <span className="mt-1 font-bold">{formatDay(date)}</span>
                     </button>
                   );
                 })}
               </div>
 
-              {/* ==================================================
+              {/* =================================================
                   THEATER
-              ================================================== */}
+              ================================================= */}
 
-              <h2
-                className="
-                  mb-5
-                  mt-8
-                  text-2xl
-                  font-bold
-                "
-                style={{
-                  color: "#1090DF",
-                }}
-              >
+              <h2 className="mb-5 mt-8 text-2xl font-bold text-[#1090DF]">
                 Theater
               </h2>
 
               <div className="flex flex-wrap gap-3">
                 {movie?.theaters?.length > 0 ? (
                   movie.theaters.map((theater) => {
-                    const isSelected =
-                      selectedTheater?.id ===
-                      theater.id;
+                    const selected = selectedTheater?.id === theater.id;
 
                     return (
                       <button
                         key={theater.id}
                         type="button"
-                        onClick={() =>
-                          setSelectedTheater(theater)
-                        }
-                        className={`
-                          rounded-lg
-                          border
-                          px-5
-                          py-3
-                          text-sm
-                          transition-all
-                          duration-200
-
-                          ${
-                            isSelected
-                              ? "border-[#1090DF] bg-[#1090DF] text-white"
-                              : "border-gray-300 bg-white text-gray-600 hover:border-[#1090DF] hover:text-[#1090DF]"
-                          }
-                        `}
+                        onClick={() => {
+                          setSelectedTheater(theater);
+                          setSelectedTime(null);
+                        }}
+                        className={`rounded-lg border px-5 py-3 text-sm ${
+                          selected
+                            ? "border-[#1090DF] bg-[#1090DF] text-white"
+                            : "border-gray-300 bg-white text-gray-600"
+                        }`}
                       >
-                        <span className="mr-1">
-                          ◉
-                        </span>
-
-                        {theater.name}
+                        ◉ {theater.name}
                       </button>
                     );
                   })
@@ -481,261 +508,128 @@ const MovieDetails = () => {
                 )}
               </div>
 
-              {/* ==================================================
+              {/* =================================================
                   TIME
-              ================================================== */}
+              ================================================= */}
 
-              <h2
-                className="
-                  mb-5
-                  mt-8
-                  text-2xl
-                  font-bold
-                "
-                style={{
-                  color: "#1090DF",
-                }}
-              >
+              <h2 className="mb-5 mt-8 text-2xl font-bold text-[#1090DF]">
                 Time
               </h2>
 
-              <div className="flex flex-wrap gap-3">
-                {times.map((time) => {
-                  const isSelected =
-                    selectedTime === time;
+              {timelist?.length > 0 ? (
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  {timelist.map((item) => {
+                    const time = item?.startTime;
 
-                  return (
-                    <button
-                      key={time}
-                      type="button"
-                      onClick={() =>
-                        setSelectedTime(time)
-                      }
-                      className={`
-                        rounded-lg
-                        border
-                        px-6
-                        py-3
-                        text-sm
-                        transition-all
-                        duration-200
+                    const formattedTime = new Date(time).toLocaleTimeString(
+                      "en-IN",
+                      {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                      },
+                    );
 
-                        ${
-                          isSelected
-                            ? "border-[#1090DF] bg-[#1090DF] text-white"
-                            : "border-gray-300 bg-white text-gray-700 hover:border-[#1090DF] hover:text-[#1090DF]"
-                        }
-                      `}
-                    >
-                      {time}
-                    </button>
-                  );
-                })}
-              </div>
+                    const selected = selectedTime?.id === item?.id;
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setSelectedTime(item)}
+                        className={`
+            flex h-9 min-w-15
+            items-center justify-center
+            rounded-sm border
+            px-2 text-[10px]
+            transition
+            ${
+              selected
+                ? "border-[#1090DF] bg-[#e6f5ff] text-[#1090DF]"
+                : "border-gray-300 bg-white/50 text-gray-700"
+            }
+          `}
+                      >
+                        {formattedTime}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">
+                  No show times available.
+                </p>
+              )}
             </div>
 
-            {/* ==================================================
+            {/* =====================================================
                 RIGHT SIDE
-            ================================================== */}
+            ===================================================== */}
 
             <div className="w-full">
-
-              {/* ==================================================
-                  MOVIE IMAGE
-              ================================================== */}
-
-              <div
-                className="
-                  mb-5
-                  flex
-                  -translate-x-24
-                  -translate-y-12
-                  justify-end
-                "
-              >
+              <div className="mb-5 flex justify-end">
                 <img
                   src={movie?.image}
                   alt={movie?.name}
-                  className="
-                    h-[320px]
-                    w-[320px]
-                    rounded-xl
-                    object-cover
-                    shadow-md
-                  "
+                  className="h-80 w-[320px] rounded-xl object-cover shadow-md"
                 />
               </div>
 
-              {/* ==================================================
-                  CONTENT
-              ================================================== */}
-
-              <div
-                className="
-                  flex
-                  -translate-x-24
-                  -translate-y-12
-                  justify-end
-                "
-              >
+              <div className="flex justify-end">
                 <div className="w-[320px] max-w-full">
+                  {/* MOVIE NAME */}
 
-                  {/* ==================================================
-                      MOVIE NAME
-                  ================================================== */}
-
-                  <h1
-                    className="
-                      w-full
-                      break-words
-                      text-2xl
-                      font-bold
-                      uppercase
-                      leading-tight
-                    "
-                    style={{
-                      color: "#1090DF",
-                    }}
-                  >
+                  <h1 className="w-full break-words text-2xl font-bold uppercase leading-tight text-[#1090DF]">
                     {movie?.name}
                   </h1>
 
-                  {/* ==================================================
-                      DESCRIPTION
-                  ================================================== */}
+                  {/* DESCRIPTION */}
 
-                  <p
-                    className="
-                      mt-3
-                      w-full
-                      break-words
-                      text-sm
-                      leading-6
-                      text-gray-600
-                    "
-                  >
+                  <p className="mt-3 w-full break-words text-sm leading-6 text-gray-600">
                     {movie?.description}
                   </p>
 
-                  {/* ==================================================
-                      MOVIE INFORMATION
-                  ================================================== */}
+                  {/* MOVIE INFO */}
 
-                  <div
-                    className="
-                      mt-4
-                      w-full
-                      space-y-2
-                      text-sm
-                    "
-                  >
-
-                    {/* Duration */}
-
-                    <div className="flex w-full">
-                      <span
-                        className="
-                          w-[80px]
-                          shrink-0
-                          text-gray-500
-                        "
-                      >
+                  <div className="mt-4 w-full space-y-2 text-sm">
+                    <div className="flex">
+                      <span className="w-20 shrink-0 text-gray-500">
                         Duration
                       </span>
 
-                      <span
-                        className="
-                          break-words
-                          font-medium
-                          text-gray-800
-                        "
-                      >
+                      <span className="font-medium text-gray-800">
                         {movie?.duration} min
                       </span>
                     </div>
 
-                    {/* Language */}
-
-                    <div className="flex w-full">
-                      <span
-                        className="
-                          w-[80px]
-                          shrink-0
-                          text-gray-500
-                        "
-                      >
+                    <div className="flex">
+                      <span className="w-20 shrink-0 text-gray-500">
                         Language
                       </span>
 
-                      <span
-                        className="
-                          break-words
-                          font-medium
-                          text-gray-800
-                        "
-                      >
+                      <span className="font-medium text-gray-800">
                         {movie?.languages?.join(", ")}
                       </span>
                     </div>
 
-                    {/* Type */}
-
-                    <div className="flex w-full">
-                      <span
-                        className="
-                          w-[80px]
-                          shrink-0
-                          text-gray-500
-                        "
-                      >
+                    <div className="flex">
+                      <span className="w-20 shrink-0 text-gray-500">
                         Type
                       </span>
 
-                      <span
-                        className="
-                          font-medium
-                          text-gray-800
-                        "
-                      >
-                        2D
-                      </span>
+                      <span className="font-medium text-gray-800">2D</span>
                     </div>
                   </div>
 
-                  {/* ==================================================
-                      BOOKING CARD
-                  ================================================== */}
+                  {/* =================================================
+                      BOOKING BOX
+                  ================================================= */}
 
-                  <div
-                    className="
-                      mt-6
-                      min-h-[250px]
-                      w-full
-                      rounded-xl
-                      border
-                      border-[#1090DF]
-                      bg-white/80
-                      p-10
-                    "
-                  >
-
-                    {/* SELECTED THEATER */}
+                  <div className="mt-6 min-h-62.5 w-full rounded-xl border border-[#1090DF] bg-white/80 p-10">
+                    {/* THEATER */}
 
                     {selectedTheater && (
-                      <h2
-                        className="
-                          overflow-hidden
-                          text-2xl
-                          font-bold
-                          leading-tight
-                          whitespace-nowrap
-                          text-ellipsis
-                        "
-                        style={{
-                          color: "#1090DF",
-                        }}
-                        title={selectedTheater.name}
-                      >
+                      <h2 className="overflow-hidden text-2xl font-bold text-[#1090DF]">
                         {selectedTheater.name}
                       </h2>
                     )}
@@ -749,39 +643,26 @@ const MovieDetails = () => {
                     {/* TIME */}
 
                     <p className="mt-1 text-base text-gray-600">
-                      {selectedTime || "Select a time"}
+                      {selectedTime
+                        ? formatShowTime(selectedTime.startTime)
+                        : "No time selected"}
                     </p>
-
-                    {/* NOTE */}
 
                     <p className="mt-4 text-xs text-gray-500">
                       *Select your seat before booking
                     </p>
 
-                    {/* ==================================================
-                        BOOK NOW
-                    ================================================== */}
+                    {/* BOOK NOW */}
 
                     <button
                       type="button"
                       onClick={handleBookNow}
-                      className="
-                        mt-11
-                        w-full
-                        rounded-md
-                        border
-                        border-[#1090DF]
-                        bg-white
-                        px-14
-                        py-3
-                        text-md
-                        font-medium
-                        text-[#1090DF]
-                        transition-all
-                        duration-200
-                        hover:bg-[#1090DF]
-                        hover:text-white
-                      "
+                      disabled={!selectedTime}
+                      className={`mt-11 w-full rounded-md border px-14 py-3 text-md font-medium transition ${
+                        selectedTime
+                          ? "border-[#1090DF] bg-white text-[#1090DF] hover:bg-[#1090DF] hover:text-white"
+                          : "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-400"
+                      }`}
                     >
                       Book Now
                     </button>
@@ -793,14 +674,13 @@ const MovieDetails = () => {
         </div>
       </section>
 
-      {/* ==================================================
-          SEAT SELECTION
-          MOVED TO common/SeatSelection.jsx
-      ================================================== */}
+      {/* =====================================================
+          SEAT SELECTION MODAL
+      ===================================================== */}
 
       <SeatSelection
         isOpen={seatModalOpen}
-        onClose={handleCloseSeatModal}
+        onClose={() => setSeatModalOpen(false)}
         onConfirm={handleConfirmSeats}
       />
     </main>

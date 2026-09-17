@@ -26,7 +26,7 @@ const Login = () => {
   };
 
   const handleLogin = async (e) => {
-    e.preventDefault();
+    e.preventDefault();//Ye line reload ko rok deti hai.
 
     setMessage("");
     setLoading(true);
@@ -35,9 +35,8 @@ const Login = () => {
       const response = await loginUser(
         formData.email,
         formData.password
-      );
+      );//api call
 
-      console.log("Login Response:", response);
 
       // API response se token nikalo
       const token = response?.data?.accessToken;

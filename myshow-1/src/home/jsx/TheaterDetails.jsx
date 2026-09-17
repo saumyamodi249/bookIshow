@@ -1,48 +1,288 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import Navbar from "./Navbar";
 
+import Navbar from "./Navbar";
 import {
   getTheaterDetails,
   getTheaterShows,
-} from "../js/TheaterDetails";
+  getShowTimesByDate,
+  getScreenById,
+} from "../js/Theater";
+import SeatSelection from "../../common/SeatSelection";
 
-// =====================================================
-// SEAT SELECTION COMPONENT
-// =====================================================
+const formatApiDate = (date) => {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const year = date.getFullYear();
 
-import SeatSelection from "../../common/SeatSelection.jsx";
+  return `${month}-${day}-${year}`;
+};
+
+const getNextThreeDates = () => {
+  const today = new Date();
+
+  return Array.from({ length: 3 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + index);
+
+    return formatApiDate(date);
+  });
+};
 
 const TheaterDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // =====================================================
-  // STATES
-  // =====================================================
-
   const [theater, setTheater] = useState(null);
-  const [shows, setShows] = useState([]);
-
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedTimes, setSelectedTimes] = useState({});
+  const [movies, setMovies] = useState([]);
 
   const [loading, setLoading] = useState(true);
-  const [showsLoading, setShowsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // =====================================================
-  // SEAT SELECTION
-  // =====================================================
+  const [selectedDate, setSelectedDate] = useState(getNextThreeDates()[0]);
 
-  const [seatModalOpen, setSeatModalOpen] = useState(false);
-  const [selectedSeats, setSelectedSeats] = useState([]);
+  /*
+   * SELECTED SHOWTIME
+   * Tracks which movie + showtime button the user picked
+   */
+  const [selectedShow, setSelectedShow] = useState(null);
+  // shape: { movieId, showTimeId, startTime }
 
-  // =====================================================
-  // BACKGROUND
-  // =====================================================
+  /*
+   * BOOKING FLOW (by-date lookup -> screen lookup -> modal)
+   */
+  const [isSeatModalOpen, setIsSeatModalOpen] = useState(false);
+  const [selectedScreen, setSelectedScreen] = useState(null);
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingError, setBookingError] = useState("");
 
-  const backgroundStyle = {
+  const dates = getNextThreeDates();
+
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const [theaterData, showData] = await Promise.all([
+          getTheaterDetails(id),
+          getTheaterShows(id, selectedDate),
+        ]);
+
+        setTheater(
+          theaterData?.data || theaterData?.theater || theaterData || null,
+        );
+
+        const movieList = Array.isArray(showData)
+          ? showData
+          : Array.isArray(showData?.data)
+            ? showData.data
+            : [];
+
+        setMovies(movieList);
+
+        // reset selection when date changes
+        setSelectedShow(null);
+      } catch (err) {
+        console.error("THEATER DETAILS ERROR:", err);
+        setError(err.message || "Failed to load theater details");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [id, selectedDate]);
+
+  /*
+   * LANGUAGE
+   */
+  const getLanguage = (movie) =>
+    Array.isArray(movie?.languages) ? movie.languages.join(", ") : "Hindi";
+
+  /*
+   * FORMAT / LAYOUT TYPE (from showtime pricing)
+   */
+  const getFormats = (movie) => {
+    const formats = new Set();
+
+    (movie?.showTimes || []).forEach((show) => {
+      (show?.price || []).forEach((p) => {
+        if (p?.layoutType) formats.add(p.layoutType);
+      });
+    });
+
+    return Array.from(formats).join(", ");
+  };
+
+  /*
+   * SHOW TIME (formats ISO startTime -> "3:00 PM")
+   */
+  const getTime = (show) => {
+    if (!show?.startTime) return "--:--";
+
+    const d = new Date(show.startTime);
+
+    return d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  /*
+   * SELECT SHOWTIME
+   */
+  const handleSelectShow = (movie, show) => {
+    setSelectedShow({
+      movieId: movie.id,
+      showTimeId: show.id,
+      startTime: show.startTime,
+    });
+    setBookingError("");
+  };
+
+  /*
+   * BOOK NOW
+   *
+   * 1. Requires a showtime to be selected for this movie
+   * 2. Fetch showtimes-by-date for the movie
+   * 3. Find current theater in that response
+   * 4. Find the matching showtime by showTimeId -> get screenId
+   * 5. Fetch screen by id
+   * 6. Open SeatSelection modal
+   */
+  const handleBookNow = async (movie) => {
+    if (!selectedShow || selectedShow.movieId !== movie.id) {
+      setBookingError("Please select a showtime first.");
+      return;
+    }
+
+    try {
+      setBookingLoading(true);
+      setBookingError("");
+
+      const byDateData = await getShowTimesByDate(movie.id, selectedDate);
+
+      const theatersList = Array.isArray(byDateData)
+        ? byDateData
+        : Array.isArray(byDateData?.theaters)
+          ? byDateData.theaters
+          : [];
+
+      const matchedTheater = theatersList.find(
+        (t) => String(t.id) === String(id),
+      );
+
+      if (!matchedTheater) {
+        throw new Error("Could not find this theater for the selected date.");
+      }
+
+      const matchedShowtime = (matchedTheater.showtimes || []).find(
+        (st) => String(st.showTimeId) === String(selectedShow.showTimeId),
+      );
+
+      if (!matchedShowtime) {
+        throw new Error("Could not find the selected showtime.");
+      }
+
+      const screenId = matchedShowtime.screenId;
+
+      if (!screenId) {
+        throw new Error("No screen assigned to this showtime.");
+      }
+
+      const screenData = await getScreenById(screenId);
+
+      setSelectedScreen(screenData?.data || screenData);
+
+      setSelectedScreen(screenData?.data || screenData);
+      setIsSeatModalOpen(true);
+    } catch (err) {
+      console.error("BOOKING ERROR:", err);
+      setBookingError(err.message || "Failed to start booking.");
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  /*
+   * SEAT CONFIRM
+   */
+  const handleSeatConfirm = (seatCount) => {
+    setIsSeatModalOpen(false);
+
+    const bookedMovie =
+      movies.find((m) => m.id === selectedShow.movieId) || null;
+
+    const screenId =
+      selectedScreen?.screen?.id ||
+      selectedScreen?.screen?._id ||
+      selectedScreen?.screen?.screenId ||
+      null;
+
+    if (!screenId) {
+      console.error("SCREEN ID NOT FOUND");
+      return;
+    }
+
+    navigate(`/screen/${id}`, {
+      state: {
+        movie: bookedMovie,
+        theater,
+        theaterId: id,
+
+        date: selectedDate,
+        time: selectedShow.startTime,
+
+        showTimeId: selectedShow.showTimeId,
+
+        // IMPORTANT
+        screenId: screenId,
+        screen: selectedScreen,
+
+        seatCount,
+      },
+    });
+  };
+
+  /*
+   * THEATER NAME
+   */
+  const theaterName =
+    theater?.name ||
+    theater?.theaterName ||
+    theater?.theater_name ||
+    theater?.title ||
+    "Theater Name";
+
+  /*
+   * ADDRESS
+   */
+  const theaterAddress =
+    theater?.address ||
+    theater?.location ||
+    theater?.city ||
+    "123 Cinema Lane, Movie Town, CA 90210";
+
+  /*
+   * DATE FORMAT
+   */
+  const formatDate = (date) => {
+    const [month, day, year] = date.split("-");
+    const d = new Date(Number(year), Number(month) - 1, Number(day));
+
+    return {
+      date: d.toLocaleDateString("en-US", { day: "2-digit", month: "short" }),
+      day: d.toLocaleDateString("en-US", { weekday: "short" }),
+    };
+  };
+
+  /*
+   * BACKGROUND
+   */
+  const pageStyle = {
     background: `
       radial-gradient(
         circle 700px at 100% 0%,
@@ -60,1090 +300,224 @@ const TheaterDetails = () => {
     `,
   };
 
-  // =====================================================
-  // DATE HELPERS
-  // =====================================================
-
-  const formatApiDate = (date) => {
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    const year = date.getFullYear();
-
-    return `${month}-${day}-${year}`;
-  };
-
-  const getDateInfo = (date) => {
-    return {
-      value: formatApiDate(date),
-
-      day: String(date.getDate()).padStart(2, "0"),
-
-      month: date.toLocaleDateString("en-US", {
-        month: "short",
-      }),
-
-      weekday: date.toLocaleDateString("en-US", {
-        weekday: "short",
-      }),
-    };
-  };
-
-  // =====================================================
-  // THREE DATES
-  // FIRST DATE IS DEFAULT
-  // =====================================================
-
-  const dates = Array.from({ length: 3 }, (_, index) => {
-    const date = new Date();
-
-    date.setHours(0, 0, 0, 0);
-
-    date.setDate(date.getDate() + index);
-
-    return getDateInfo(date);
-  });
-
-  // =====================================================
-  // DEFAULT FIRST DATE
-  // =====================================================
-
-  useEffect(() => {
-    if (dates.length > 0 && !selectedDate) {
-      setSelectedDate(dates[0].value);
-    }
-  }, []);
-
-  // =====================================================
-  // GET THEATER DETAILS
-  // =====================================================
-
-  useEffect(() => {
-    const fetchTheater = async () => {
-      try {
-        setLoading(true);
-        setError("");
-
-        if (!id) {
-          throw new Error("Theater ID is missing.");
-        }
-
-        console.log("THEATER ID:", id);
-
-        const response = await getTheaterDetails(id);
-
-        console.log("THEATER DETAILS RESPONSE:", response);
-
-        const theaterData =
-          response?.data ||
-          response?.theater ||
-          response;
-
-        setTheater(theaterData || null);
-      } catch (error) {
-        console.error("THEATER DETAILS ERROR:", error);
-
-        setError(
-          error?.message ||
-            "Failed to load theater details."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTheater();
-  }, [id]);
-
-  // =====================================================
-  // GET SHOWS WHEN DATE CHANGES
-  // =====================================================
-
-  useEffect(() => {
-    if (!id || !selectedDate) {
-      return;
-    }
-
-    const fetchShows = async () => {
-      try {
-        setShowsLoading(true);
-
-        console.log(
-          "FETCHING SHOWS FOR DATE:",
-          selectedDate
-        );
-
-        const response = await getTheaterShows(
-          id,
-          selectedDate
-        );
-
-        console.log(
-          "THEATER SHOWS RESPONSE:",
-          response
-        );
-
-        const showsData =
-          response?.data ||
-          response?.shows ||
-          [];
-
-        const finalShows = Array.isArray(showsData)
-          ? showsData
-          : [];
-
-        setShows(finalShows);
-
-        // =================================================
-        // FIRST TIME OF EVERY MOVIE AS DEFAULT
-        // =================================================
-
-        const defaultTimes = {};
-
-        finalShows.forEach((movie, index) => {
-          const movieId =
-            movie?.id ||
-            movie?._id ||
-            `movie-${index}`;
-
-          const showTimes =
-            movie?.showTimes ||
-            movie?.showtimes ||
-            movie?.times ||
-            [];
-
-          if (
-            Array.isArray(showTimes) &&
-            showTimes.length > 0
-          ) {
-            const firstShow = showTimes[0];
-
-            const firstTime =
-              typeof firstShow === "string"
-                ? firstShow
-                : firstShow?.startTime ||
-                  firstShow?.time ||
-                  firstShow?.showTime ||
-                  firstShow?.start ||
-                  firstShow?.dateTime ||
-                  "";
-
-            if (firstTime) {
-              defaultTimes[movieId] = firstTime;
-            }
-          }
-        });
-
-        setSelectedTimes(defaultTimes);
-      } catch (error) {
-        console.error(
-          "THEATER SHOWS ERROR:",
-          error
-        );
-
-        setShows([]);
-        setSelectedTimes({});
-      } finally {
-        setShowsLoading(false);
-      }
-    };
-
-    fetchShows();
-  }, [id, selectedDate]);
-
-  // =====================================================
-  // FORMAT TIME
-  // =====================================================
-
-  const formatShowTime = (time) => {
-    if (!time) {
-      return "";
-    }
-
-    try {
-      const date = new Date(time);
-
-      if (Number.isNaN(date.getTime())) {
-        return time;
-      }
-
-      return date.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      });
-    } catch {
-      return time;
-    }
-  };
-
-  // =====================================================
-  // GET SHOW TIME VALUE
-  // =====================================================
-
-  const getShowTimeValue = (showTime) => {
-    if (typeof showTime === "string") {
-      return showTime;
-    }
-
-    return (
-      showTime?.startTime ||
-      showTime?.time ||
-      showTime?.showTime ||
-      showTime?.start ||
-      showTime?.dateTime ||
-      ""
-    );
-  };
-
-  // =====================================================
-  // THEATER NAME
-  // =====================================================
-
-  const theaterName =
-    theater?.name ||
-    theater?.theaterName ||
-    theater?.title ||
-    "Theater Name";
-
-  // =====================================================
-  // THEATER ADDRESS
-  // =====================================================
-
-  const theaterAddress =
-    theater?.address ||
-    theater?.location ||
-    theater?.city ||
-    "123 Main Street, Springfield, USA";
-
-  // =====================================================
-  // BOOK NOW
-  // =====================================================
-
-  const handleBookNow = (movie, movieId, selectedTime) => {
-    if (!selectedDate) {
-      alert("Please select a date");
-      return;
-    }
-
-    if (!selectedTime) {
-      alert("Please select a time");
-      return;
-    }
-
-    // Save the movie/show information
-    setSelectedSeats([]);
-
-    // Store booking information temporarily
-    setBookingMovie(movie);
-    setBookingMovieId(movieId);
-    setBookingTime(selectedTime);
-
-    // Open SeatSelection modal
-    setSeatModalOpen(true);
-  };
-
-  // =====================================================
-  // BOOKING INFORMATION
-  // =====================================================
-
-  const [bookingMovie, setBookingMovie] = useState(null);
-  const [bookingMovieId, setBookingMovieId] = useState(null);
-  const [bookingTime, setBookingTime] = useState("");
-
-  // =====================================================
-  // CONFIRM SEAT
-  // =====================================================
-
-  const handleConfirmSeats = (numberOfSeats) => {
-    if (!numberOfSeats) {
-      return;
-    }
-
-    console.log("Theater ID:", id);
-    console.log("Movie:", bookingMovie);
-    console.log("Movie ID:", bookingMovieId);
-    console.log("Theater:", theater);
-    console.log("Date:", selectedDate);
-    console.log("Time:", bookingTime);
-    console.log("Selected Seat:", numberOfSeats);
-
-    // Close modal
-    setSeatModalOpen(false);
-
-    // Go to booking page
-    navigate("/book-now", {
-      state: {
-        movie: bookingMovie,
-        movieId: bookingMovieId,
-
-        theaterId: id,
-        theater: theater,
-
-        date: selectedDate,
-        time: bookingTime,
-
-        seats: [numberOfSeats],
-        seatCount: 1,
-      },
-    });
-
-    // Reset
-    setSelectedSeats([]);
-  };
-
-  // =====================================================
-  // CLOSE SEAT MODAL
-  // =====================================================
-
-  const handleCloseSeatModal = () => {
-    setSeatModalOpen(false);
-    setSelectedSeats([]);
-  };
-
-  // =====================================================
-  // LOADING
-  // =====================================================
-
   if (loading) {
     return (
-      <main
-        className="min-h-screen overflow-y-auto hide-scrollbar"
-        style={backgroundStyle}
-      >
+      <main className="min-h-screen" style={pageStyle}>
         <Navbar />
-
-        <section className="px-6 py-8">
-          <div className="mx-auto max-w-6xl">
-            <button
-              type="button"
-              onClick={() => navigate("/home")}
-              className="
-                mb-8
-                flex
-                items-center
-                gap-2
-                text-sm
-                font-medium
-                text-gray-500
-                transition
-                hover:text-[#1090DF]
-              "
-            >
-              <span className="text-xl">←</span>
-              Back
-            </button>
-
-            <div
-              className="
-                rounded-2xl
-                border
-                border-gray-200
-                bg-white/70
-                p-12
-                text-center
-                shadow-sm
-              "
-            >
-              <div
-                className="
-                  mx-auto
-                  mb-5
-                  h-10
-                  w-10
-                  animate-spin
-                  rounded-full
-                  border-4
-                  border-sky-200
-                  border-t-[#1090DF]
-                "
-              />
-
-              <p className="text-gray-500">
-                Loading theater details...
-              </p>
-            </div>
-          </div>
-        </section>
+        <div className="mx-auto max-w-7xl px-6 py-16 text-center text-gray-500">
+          Loading theater...
+        </div>
       </main>
     );
   }
-
-  // =====================================================
-  // ERROR
-  // =====================================================
 
   if (error) {
     return (
-      <main
-        className="min-h-screen overflow-y-auto hide-scrollbar"
-        style={backgroundStyle}
-      >
+      <main className="min-h-screen" style={pageStyle}>
         <Navbar />
-
-        <section className="px-6 py-8">
-          <div className="mx-auto max-w-6xl">
-            <button
-              type="button"
-              onClick={() => navigate("/home")}
-              className="
-                mb-8
-                flex
-                items-center
-                gap-2
-                text-sm
-                font-medium
-                text-gray-500
-                transition
-                hover:text-[#1090DF]
-              "
-            >
-              <span className="text-xl">←</span>
-              Back
-            </button>
-
-            <div
-              className="
-                rounded-xl
-                border
-                border-red-200
-                bg-red-50
-                p-5
-                text-red-600
-              "
-            >
-              {error}
-            </div>
-          </div>
-        </section>
+        <div className="mx-auto max-w-7xl px-6 py-16">
+          <div className="rounded-lg bg-red-50 p-4 text-red-600">{error}</div>
+        </div>
       </main>
     );
   }
 
-  // =====================================================
-  // MAIN UI
-  // =====================================================
-
   return (
     <main
-      className="
-        min-h-screen
-        overflow-y-auto
-        hide-scrollbar
-      "
-      style={backgroundStyle}
+      className="min-h-screen overflow-y-auto hide-scrollbar"
+      style={pageStyle}
     >
       <Navbar />
 
       <section className="px-6 py-8">
-        <div className="mx-auto max-w-6xl">
-
-          {/* =================================================
-              BACK
-          ================================================= */}
-
-          <button
-            type="button"
-            onClick={() => navigate("/home")}
-            className="
-              mb-8
-              flex
-              items-center
-              gap-2
-              text-sm
-              font-medium
-              text-gray-500
-              transition
-              duration-200
-              hover:text-[#1090DF]
-            "
-          >
-            <span className="text-xl">←</span>
-            Back
-          </button>
-
-          {/* =================================================
-              THEATER HEADER
-          ================================================= */}
-
+        <div className="mx-auto max-w-7xl">
+          {/* THEATER HEADER */}
           <div className="mb-5">
-
-            {/* THEATER NAME */}
-
-            <div className="flex items-center gap-3">
-              <span
-                className="
-                  text-2xl
-                  font-normal
-                  text-[#1090DF]
-                "
-              >
-                ←
-              </span>
-
-              <h1
-                className="
-                  text-4xl
-                  font-bold
-                  text-[#1090DF]
-                "
-              >
+            <button
+              type="button"
+              onClick={() => navigate("/theaters")}
+              className="flex items-center gap-3"
+            >
+              <span className="text-3xl font-light text-[#1090DF]">←</span>
+              <h1 className="text-3xl font-bold text-[#1090DF]">
                 {theaterName}
               </h1>
-            </div>
+            </button>
 
-            {/* LOCATION */}
-
-            <div
-              className="
-                mt-3
-                flex
-                items-center
-                gap-2
-                pl-11
-                text-sm
-                text-gray-500
-              "
-            >
+            <div className="mt-2 ml-8 flex items-center gap-2 text-[10px] text-gray-500">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="1.5"
-                className="h-5 w-5"
+                className="h-4 w-4"
               >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  d="
-                    M12 21s7-6.2 7-12
-                    a7 7 0 1 0-14 0
-                    c0 5.8 7 12 7 12Z
-                  "
+                  d="M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"
                 />
-
-                <circle
-                  cx="12"
-                  cy="9"
-                  r="2.2"
-                />
+                <circle cx="12" cy="9" r="2.2" />
               </svg>
-
-              <span>
-                {theaterAddress}
-              </span>
+              <span>{theaterAddress}</span>
             </div>
           </div>
 
-          {/* =================================================
-              DATE SELECTOR
-          ================================================= */}
-
-          <div
-            className="
-              mb-2
-              flex
-              items-center
-              gap-2
-            "
-          >
-
-            {/* PREVIOUS */}
-
+          {/* DATES */}
+          <div className="mb-2 flex items-center gap-2">
             <button
               type="button"
-              className="
-                px-2
-                text-xl
-                text-[#1090DF]
-              "
               onClick={() => {
-                const currentIndex =
-                  dates.findIndex(
-                    (date) =>
-                      date.value === selectedDate
-                  );
-
-                if (currentIndex > 0) {
-                  setSelectedDate(
-                    dates[currentIndex - 1].value
-                  );
-                }
+                const index = dates.indexOf(selectedDate);
+                if (index > 0) setSelectedDate(dates[index - 1]);
               }}
+              className="text-xl font-light text-[#1090DF]"
             >
               ‹
             </button>
 
-            {/* DATES */}
-
             {dates.map((date) => {
-              const isSelected =
-                selectedDate === date.value;
+              const formatted = formatDate(date);
 
               return (
                 <button
-                  key={date.value}
+                  key={date}
                   type="button"
-                  onClick={() =>
-                    setSelectedDate(date.value)
-                  }
+                  onClick={() => setSelectedDate(date)}
                   className={`
-                    min-w-[58px]
-                    rounded-md
-                    border
-                    px-3
-                    py-2
-                    text-xs
-                    transition
-                    duration-200
-
+                    flex h-9 min-w-[44px] flex-col items-center justify-center
+                    rounded-sm border px-2 text-[9px]
                     ${
-                      isSelected
-                        ? `
-                          border-[#1090DF]
-                          bg-[#1090DF]
-                          text-white
-                        `
-                        : `
-                          border-gray-300
-                          bg-white/70
-                          text-gray-600
-                          hover:border-[#1090DF]
-                          hover:text-[#1090DF]
-                        `
+                      selectedDate === date
+                        ? "border-[#1090DF] bg-[#e6f5ff]"
+                        : "border-gray-300 bg-white/50"
                     }
                   `}
                 >
-                  <div className="font-medium">
-                    {date.day} {date.month}
-                  </div>
-
-                  <div className="mt-0.5">
-                    {date.weekday}
-                  </div>
+                  <span>{formatted.date}</span>
+                  <span>{formatted.day}</span>
                 </button>
               );
             })}
 
-            {/* NEXT */}
-
             <button
               type="button"
-              className="
-                px-2
-                text-xl
-                text-[#1090DF]
-              "
               onClick={() => {
-                const currentIndex =
-                  dates.findIndex(
-                    (date) =>
-                      date.value === selectedDate
-                  );
-
-                if (
-                  currentIndex <
-                  dates.length - 1
-                ) {
-                  setSelectedDate(
-                    dates[currentIndex + 1].value
-                  );
-                }
+                const index = dates.indexOf(selectedDate);
+                if (index < dates.length - 1) setSelectedDate(dates[index + 1]);
               }}
+              className="text-xl font-light text-[#1090DF]"
             >
               ›
             </button>
           </div>
 
-          {/* DIVIDER */}
+          <div className="mb-8 border-b border-gray-300" />
 
-          <div
-            className="
-              mb-8
-              border-b
-              border-gray-300
-            "
-          />
-
-          {/* =================================================
-              SHOWS LOADING
-          ================================================= */}
-
-          {showsLoading ? (
-            <div
-              className="
-                flex
-                min-h-[250px]
-                items-center
-                justify-center
-              "
-            >
-              <div className="text-center">
-
-                <div
-                  className="
-                    mx-auto
-                    mb-4
-                    h-8
-                    w-8
-                    animate-spin
-                    rounded-full
-                    border-4
-                    border-sky-200
-                    border-t-[#1090DF]
-                  "
-                />
-
-                <p className="text-gray-500">
-                  Loading shows...
-                </p>
-
-              </div>
-            </div>
-          ) : shows.length === 0 ? (
-
-            /* =================================================
-                NO SHOWS
-            ================================================= */
-
-            <div
-              className="
-                flex
-                min-h-[250px]
-                items-center
-                justify-center
-                text-center
-              "
-            >
-              <p
-                className="
-                  text-lg
-                  text-gray-500
-                "
-              >
-                No shows available for this date.
-              </p>
-            </div>
-
-          ) : (
-
-            /* =================================================
-                SHOW LIST
-            ================================================= */
-
-            <div className="space-y-0">
-
-              {shows.map((movie, movieIndex) => {
-
-                // ===========================================
-                // MOVIE ID
-                // ===========================================
-
-                const movieId =
-                  movie?.id ||
-                  movie?._id ||
-                  `movie-${movieIndex}`;
-
-                // ===========================================
-                // MOVIE NAME
-                // ===========================================
-
-                const movieName =
-                  movie?.name ||
-                  movie?.title ||
-                  movie?.movieName ||
-                  `Movie ${movieIndex + 1}`;
-
-                // ===========================================
-                // LANGUAGE
-                // ===========================================
-
-                const language =
-                  Array.isArray(movie?.languages)
-                    ? movie.languages.join(", ")
-                    : movie?.language ||
-                      "Language";
-
-                // ===========================================
-                // CATEGORY
-                // ===========================================
-
-                const category =
-                  Array.isArray(movie?.category)
-                    ? movie.category.join(", ")
-                    : movie?.category ||
-                      movie?.genre ||
-                      "";
-
-                // ===========================================
-                // SHOW TIMES
-                // ===========================================
-
-                const showTimes =
-                  movie?.showTimes ||
-                  movie?.showtimes ||
-                  movie?.times ||
-                  [];
-
-                // ===========================================
-                // CURRENT SELECTED TIME
-                // ===========================================
-
-                const selectedTime =
-                  selectedTimes[movieId] || "";
-
-                return (
-                  <div
-                    key={movieId}
-                    className="
-                      border-b
-                      border-gray-300
-                      py-6
-                    "
-                  >
-                    <div
-                      className="
-                        flex
-                        flex-col
-                        gap-6
-                        md:flex-row
-                        md:items-center
-                        md:justify-between
-                      "
-                    >
-
-                      {/* =================================
-                          LEFT
-                      ================================= */}
-
-                      <div className="flex-1">
-
-                        {/* MOVIE NAME */}
-
-                        <h2
-                          className="
-                            text-lg
-                            font-semibold
-                            text-[#1090DF]
-                          "
-                        >
-                          {movieName}
-                        </h2>
-
-                        {/* LANGUAGE + CATEGORY */}
-
-                        <div
-                          className="
-                            mt-2
-                            flex
-                            flex-wrap
-                            gap-2
-                            text-sm
-                            text-gray-500
-                          "
-                        >
-                          {language && (
-                            <span>
-                              {language}
-                            </span>
-                          )}
-
-                          {category && (
-                            <>
-                              <span>,</span>
-
-                              <span>
-                                {category}
-                              </span>
-                            </>
-                          )}
-                        </div>
-
-                        {/* TIME LABEL */}
-
-                        <p
-                          className="
-                            mt-3
-                            mb-2
-                            text-sm
-                            text-gray-500
-                          "
-                        >
-                          Time
-                        </p>
-
-                        {/* TIME BUTTONS */}
-
-                        <div
-                          className="
-                            flex
-                            flex-wrap
-                            gap-3
-                          "
-                        >
-                          {Array.isArray(
-                            showTimes
-                          ) &&
-                          showTimes.length > 0 ? (
-
-                            showTimes.map(
-                              (
-                                showTime,
-                                timeIndex
-                              ) => {
-
-                                const timeValue =
-                                  getShowTimeValue(
-                                    showTime
-                                  );
-
-                                const isSelected =
-                                  selectedTime ===
-                                  timeValue;
-
-                                return (
-                                  <button
-                                    key={
-                                      timeIndex
-                                    }
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedTimes(
-                                        (previous) => ({
-                                          ...previous,
-                                          [movieId]:
-                                            timeValue,
-                                        })
-                                      );
-                                    }}
-                                    className={`
-                                      rounded-lg
-                                      border
-                                      px-4
-                                      py-2
-                                      text-sm
-                                      transition
-                                      duration-200
-
-                                      ${
-                                        isSelected
-                                          ? `
-                                            border-[#1090DF]
-                                            bg-[#1090DF]
-                                            text-white
-                                          `
-                                          : `
-                                            border-gray-300
-                                            bg-white/70
-                                            text-gray-600
-                                            hover:border-[#1090DF]
-                                            hover:text-[#1090DF]
-                                          `
-                                      }
-                                    `}
-                                  >
-                                    {formatShowTime(
-                                      timeValue
-                                    )}
-                                  </button>
-                                );
-                              }
-                            )
-
-                          ) : (
-
-                            <span
-                              className="
-                                text-sm
-                                text-gray-400
-                              "
-                            >
-                              No show times
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* =================================
-                          BOOK NOW
-                      ================================= */}
-
-                      <div
-                        className="
-                          flex
-                          shrink-0
-                          items-center
-                          justify-end
-                        "
-                      >
-                        <button
-                          type="button"
-                          disabled={!selectedTime}
-                          onClick={() =>
-                            handleBookNow(
-                              movie,
-                              movieId,
-                              selectedTime
-                            )
-                          }
-                          className={`
-                            mt-11
-                            w-full
-                            rounded-md
-                            border
-                            px-14
-                            py-3
-                            text-sm
-                            font-medium
-                            transition-all
-                            duration-200
-
-                            ${
-                              selectedTime
-                                ? `
-                                  border-[#1090DF]
-                                  bg-white
-                                  text-[#1090DF]
-                                  hover:bg-[#1090DF]
-                                  hover:text-white
-                                `
-                                : `
-                                  cursor-not-allowed
-                                  border-gray-200
-                                  bg-gray-100
-                                  text-gray-400
-                                `
-                            }
-                          `}
-                        >
-                          Book Now
-                        </button>
-                      </div>
-
-                    </div>
-                  </div>
-                );
-              })}
-
+          {bookingError && (
+            <div className="mb-4 rounded-md bg-red-50 px-4 py-2 text-xs text-red-600">
+              {bookingError}
             </div>
           )}
 
+          {/* MOVIES */}
+          {movies.length === 0 ? (
+            <div className="py-10 text-center text-gray-500">
+              No movies found.
+            </div>
+          ) : (
+            movies.map((movie) => {
+              const language = getLanguage(movie);
+              const format = getFormats(movie);
+              const movieShows = movie?.showTimes || [];
+
+              const isBookDisabled =
+                bookingLoading ||
+                !selectedShow ||
+                selectedShow.movieId !== movie.id;
+
+              return (
+                <div
+                  key={movie.id}
+                  className="mb-8 flex items-start justify-between"
+                >
+                  {/* MOVIE INFO */}
+                  <div>
+                    <h2 className="text-sm font-semibold text-[#1090DF]">
+                      {movie.name}
+                    </h2>
+
+                    <p className="mt-2 text-[10px] text-gray-600">
+                      {language}
+                      {format ? `, ${format}` : ""}
+                    </p>
+
+                    <p className="mt-2 text-[10px] text-gray-600">Time</p>
+
+                    <div className="mt-1 flex flex-wrap gap-3">
+                      {movieShows.length > 0 ? (
+                        movieShows.map((show) => {
+                          const isSelected =
+                            selectedShow?.showTimeId === show.id;
+
+                          return (
+                            <button
+                              key={show.id}
+                              type="button"
+                              onClick={() => handleSelectShow(movie, show)}
+                              className={`
+                                h-7 min-w-[52px] rounded-md border px-2 text-[9px]
+                                transition
+                                ${
+                                  isSelected
+                                    ? "border-[#1090DF] bg-[#1090DF] text-white"
+                                    : "border-gray-300 bg-white/40 text-gray-600 hover:border-[#1090DF]"
+                                }
+                              `}
+                            >
+                              {getTime(show)}
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <span className="text-[10px] text-gray-400">
+                          No shows available
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* BOOK NOW */}
+                  <button
+                    type="button"
+                    disabled={isBookDisabled}
+                    onClick={() => handleBookNow(movie)}
+                    className={`
+                      mt-7 h-9 w-[137px] rounded-md border text-xs transition
+                      ${
+                        isBookDisabled
+                          ? "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-400"
+                          : "border-[#1090DF] bg-white/10 text-[#1090DF] hover:bg-[#1090DF] hover:text-white"
+                      }
+                    `}
+                  >
+                    {bookingLoading && selectedShow?.movieId === movie.id
+                      ? "Loading..."
+                      : "Book Now"}
+                  </button>
+                </div>
+              );
+            })
+          )}
         </div>
       </section>
 
-      {/* ==========================================================
-          SEAT SELECTION
-          
-          SeatSelection.jsx common component handle karega.
-          TheaterDetails ke andar seat modal ka actual UI nahi hai.
-      ========================================================== */}
-
       <SeatSelection
-        isOpen={seatModalOpen}
-        onClose={handleCloseSeatModal}
-        onConfirm={handleConfirmSeats}
+        isOpen={isSeatModalOpen}
+        onClose={() => setIsSeatModalOpen(false)}
+        onConfirm={handleSeatConfirm}
       />
-
     </main>
   );
 };
